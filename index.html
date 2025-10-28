@@ -32,13 +32,15 @@
 
     .table{width:100%;border-collapse:separate;border-spacing:0 10px}
     .table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:0 8px}
-    .row{background:#0b1320;border:1px solid var(--border);border-radius:14px;display:grid;grid-template-columns: 28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px;gap:8px;padding:10px;align-items:center}
+    .row{background:#0b1320;border:1px solid var(--border);border-radius:14px;display:grid;grid-template-columns: 28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px;gap:8px;padding:10px;align-items:center}
     .row + .row{margin-top:10px}
     .idx{font:600 12px/1 monospace;color:#9aa7bd;text-align:center}
     .preview{display:flex;align-items:center;gap:10px}
     .preview img{width:60px;height:34px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
     .mini{font-size:11px;color:var(--muted)}
     .pill{display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--border);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:12px}
+    .indicator{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;font-size:11px;border:1px solid #1e3a5f;background:#0d2136;color:#b8d8ff}
+    .indicator.changed{border-color:#2563eb;background:#0c1f3c;color:#dbeafe;box-shadow:0 0 0 3px rgba(37,99,235,.15) inset}
     .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
     .kbd{border:1px solid var(--border);background:#0b1320;padding:2px 6px;border-radius:6px;font:600 11px ui-monospace}
     .hint{color:var(--muted);font-size:13px}
@@ -58,7 +60,7 @@
   <div class="wrap">
     <header>
       <h1>Pager JSON Editor</h1>
-      <span class="tag">Edit <strong>logo_medium</strong>, <strong>logo_expanded</strong>, <strong>image</strong>, <strong>image_medium</strong>, <strong>image_expanded</strong></span>
+      <span class="tag">Edit <strong>logo</strong>, <strong>logo_medium</strong>, <strong>logo_expanded</strong>, <strong>image</strong>, <strong>image_medium</strong>, <strong>image_expanded</strong></span>
     </header>
 
     <div class="grid">
@@ -121,7 +123,9 @@
     const pagersZone = document.getElementById('pagersZone');
     const toast = document.getElementById('toast');
 
-    const state = { data: null };
+    const state = { data: null, original: null };
+
+    function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
     function showToast(msg){
       toast.textContent = msg; toast.classList.add('show');
@@ -135,21 +139,51 @@
 
     function openNew(url){ if(!url) return; window.open(url, '_blank', 'noopener'); }
 
-    function mkCell(label, key, value){
+    function mkCell(label, key, value, originalValue){
       const wrap = document.createElement('div');
       wrap.style.display='grid';
       wrap.style.gap='6px';
+      const topRow = document.createElement('div');
+      topRow.style.display='flex'; topRow.style.justifyContent='space-between'; topRow.style.alignItems='center';
+
       const cap = document.createElement('div');
       cap.className='mini'; cap.textContent=label;
+
+      const indic = document.createElement('span');
+      indic.className='indicator';
+      indic.textContent='No changes';
+
+      topRow.appendChild(cap); topRow.appendChild(indic);
+
       const inp = document.createElement('input');
       inp.type='text'; inp.placeholder=key; inp.value=value||'';
       inp.dataset.key = key;
-      wrap.appendChild(cap); wrap.appendChild(inp);
-      return {wrap, inp};
+
+      // preview + open
+      const prev = document.createElement('div'); prev.className='preview mini';
+      const img = document.createElement('img'); img.alt=''; img.src = inp.value || '';
+      img.addEventListener('click',()=>openNew(inp.value));
+      const pill = document.createElement('span'); pill.className='pill'; pill.textContent = 'Open';
+      pill.style.cursor='pointer'; pill.onclick=()=>openNew(inp.value);
+      prev.appendChild(img); prev.appendChild(pill);
+
+      const setIndicator = ()=>{
+        const changed = (inp.value||'') !== (originalValue||'');
+        indic.textContent = changed ? 'Updated' : 'No changes';
+        indic.classList.toggle('changed', changed);
+      };
+      setIndicator();
+      inp.addEventListener('input', ()=>{ img.src = inp.value; setIndicator(); });
+
+      wrap.appendChild(topRow);
+      wrap.appendChild(inp);
+      wrap.appendChild(prev);
+      return {wrap, inp, setIndicator};
     }
 
     function renderPagersTable(){
       const pagers = (((state.data||{}).mlp||{}).pagers)||[];
+      const originalPagers = (((state.original||{}).mlp||{}).pagers)||[];
       if(!pagers.length){
         pagersZone.innerHTML = '<div class="empty">No pagers found at <code>mlp.pagers</code>.</div>';
         return;
@@ -157,9 +191,9 @@
       pagersZone.innerHTML = '';
 
       // Header labels (visual only)
-      const labels = ['#','logo_medium','logo_expanded','image','image_medium','image_expanded',''];
+      const labels = ['#','logo','logo_medium','logo_expanded','image','image_medium','image_expanded',''];
       const header = document.createElement('div');
-      header.style.display='grid'; header.style.gridTemplateColumns='28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px'; header.style.gap='8px'; header.style.margin='0 0 8px';
+      header.style.display='grid'; header.style.gridTemplateColumns='28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px'; header.style.gap='8px'; header.style.margin='0 0 8px';
       labels.forEach(t=>{ const th=document.createElement('div'); th.className='mini'; th.style.color='#94a3b8'; th.textContent=t; header.appendChild(th); });
       pagersZone.appendChild(header);
 
@@ -169,27 +203,15 @@
 
         const idxEl = document.createElement('div'); idxEl.className='idx'; idxEl.textContent = idx+1; row.appendChild(idxEl);
 
-        const c1 = mkCell('logo_medium','logo_medium', p.logo_medium);
-        const c2 = mkCell('logo_expanded','logo_expanded', p.logo_expanded);
-        const c3 = mkCell('image','image', p.image);
-        const c4 = mkCell('image_medium','image_medium', p.image_medium);
-        const c5 = mkCell('image_expanded','image_expanded', p.image_expanded);
+        const o = originalPagers[idx] || {};
+        const c0 = mkCell('logo','logo', p.logo, o.logo);
+        const c1 = mkCell('logo_medium','logo_medium', p.logo_medium, o.logo_medium);
+        const c2 = mkCell('logo_expanded','logo_expanded', p.logo_expanded, o.logo_expanded);
+        const c3 = mkCell('image','image', p.image, o.image);
+        const c4 = mkCell('image_medium','image_medium', p.image_medium, o.image_medium);
+        const c5 = mkCell('image_expanded','image_expanded', p.image_expanded, o.image_expanded);
 
-        [c1,c2,c3,c4,c5].forEach(({wrap,inp},i)=>{
-          // preview thumb
-          const prev = document.createElement('div'); prev.className='preview mini';
-          const img = document.createElement('img'); img.alt=''; img.src = inp.value || '';
-          img.addEventListener('click',()=>openNew(inp.value));
-          const pill = document.createElement('span'); pill.className='pill'; pill.textContent = 'Open';
-          pill.style.cursor='pointer'; pill.onclick=()=>openNew(inp.value);
-          prev.appendChild(img); prev.appendChild(pill);
-          wrap.appendChild(prev);
-
-          // live update preview on input
-          inp.addEventListener('input', ()=>{ img.src = inp.value; });
-
-          row.appendChild(wrap);
-        });
+        [c0,c1,c2,c3,c4,c5].forEach(({wrap})=> row.appendChild(wrap));
 
         // actions
         const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
@@ -200,6 +222,7 @@
 
         // stash a mapper to pull values back when saving
         row._getValues = ()=>({
+          logo: c0.inp.value.trim(),
           logo_medium: c1.inp.value.trim(),
           logo_expanded: c2.inp.value.trim(),
           image: c3.inp.value.trim(),
@@ -237,6 +260,7 @@
       try{
         const obj = JSON.parse(input.value);
         state.data = obj;
+        state.original = deepClone(obj);
         if(!state.data.mlp) state.data.mlp = {};
         if(!Array.isArray(state.data.mlp.pagers)) state.data.mlp.pagers = [];
         renderPagersTable();
@@ -249,6 +273,9 @@
       if(!state.data){ showToast('Nothing to save'); return; }
       updateFromUIIntoState();
       updateOutput();
+      // After applying, reset original to current so indicators clear
+      state.original = deepClone(state.data);
+      renderPagersTable();
       showToast('Changes applied');
     };
 
@@ -269,7 +296,7 @@
     document.getElementById('addPager').onclick = ()=>{
       if(!state.data){ showToast('Load JSON first'); return; }
       state.data.mlp = state.data.mlp || {}; state.data.mlp.pagers = state.data.mlp.pagers || [];
-      state.data.mlp.pagers.push({
+      const newPager = {
         logo: '',
         logo_medium: '',
         logo_expanded: '',
@@ -277,7 +304,11 @@
         image: '',
         image_medium: '',
         image_expanded: ''
-      });
+      };
+      state.data.mlp.pagers.push(newPager);
+      // keep original in sync so indicators show as changed
+      if(!state.original) state.original = deepClone(state.data);
+      const orig = (((state.original||{}).mlp||{}).pagers)||[]; orig.push(deepClone(newPager));
       renderPagersTable(); updateOutput();
     };
 
@@ -301,7 +332,7 @@
     document.getElementById('exampleBtn').onclick = ()=>{
       input.value = `{
   "mlp": {"pagers": [
-    {"logo":"","logo_medium":"https://example.com/logo_m.png","logo_expanded":"https://example.com/logo_x.png","subtitle":"","image":"https://example.com/img.jpg","image_medium":"https://example.com/img_m.jpg","image_expanded":"https://example.com/img_x.jpg"}
+    {"logo":"https://example.com/logo.png","logo_medium":"https://example.com/logo_m.png","logo_expanded":"https://example.com/logo_x.png","subtitle":"","image":"https://example.com/img.jpg","image_medium":"https://example.com/img_m.jpg","image_expanded":"https://example.com/img_x.jpg"}
   ]}
 }`;
       showToast('Example loaded');
