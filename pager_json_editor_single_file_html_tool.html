@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pager JSON Editor</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#10161f; --muted:#778399; --text:#e8eef9; --accent:#6ea8fe; --accent2:#7ee787;
+      --danger:#ff6b6b; --warn:#f7b955; --border:#1e293b; --chip:#0d2136; --shadow:0 8px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b0f14 0%,#0b1118 100%);color:var(--text);font:15px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,Apple Color Emoji,Segoe UI Emoji}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px}
+    header{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+    h1{font-size:22px;margin:0}
+    .tag{font-size:12px;background:var(--chip);border:1px solid var(--border);padding:6px 10px;border-radius:999px;color:var(--muted)}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+
+    .grid{display:grid;gap:16px}
+    @media(min-width:950px){.grid{grid-template-columns: 1.1fr .9fr}}
+
+    textarea, input[type="text"]{width:100%;background:#0b1320;border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 12px;outline:none}
+    textarea{min-height:280px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    button{appearance:none;border:1px solid var(--border);background:#0f1724;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer;transition:.18s transform,.18s background,.18s border}
+    button:hover{transform:translateY(-1px);background:#122036}
+    button.primary{border-color:transparent;background:linear-gradient(180deg,#3b82f6,#2563eb)}
+    button.ghost{background:transparent}
+    button.warn{background:linear-gradient(180deg,#f59e0b,#d97706);border-color:#f59e0b}
+    button.danger{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444}
+
+    .table{width:100%;border-collapse:separate;border-spacing:0 10px}
+    .table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:0 8px}
+    .row{background:#0b1320;border:1px solid var(--border);border-radius:14px;display:grid;grid-template-columns: 28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px;gap:8px;padding:10px;align-items:center}
+    .row + .row{margin-top:10px}
+    .idx{font:600 12px/1 monospace;color:#9aa7bd;text-align:center}
+    .preview{display:flex;align-items:center;gap:10px}
+    .preview img{width:60px;height:34px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+    .mini{font-size:11px;color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--border);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:12px}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+    .kbd{border:1px solid var(--border);background:#0b1320;padding:2px 6px;border-radius:6px;font:600 11px ui-monospace}
+    .hint{color:var(--muted);font-size:13px}
+
+    .hr{height:1px;background:linear-gradient(90deg,transparent,#1f334f,transparent);margin:16px 0}
+    .right textarea{min-height:190px}
+    .toast{position:fixed;inset:auto 16px 16px auto;background:#001f3a;color:#cfe5ff;border:1px solid #26507d;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:.2s}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .empty{border:1px dashed var(--border);border-radius:12px;padding:16px;color:var(--muted);text-align:center}
+    .switch{display:inline-flex;align-items:center;gap:8px}
+    .switch input{accent-color:#3b82f6}
+    .filedrop{border:1px dashed var(--border);border-radius:12px;padding:12px;text-align:center;color:var(--muted);cursor:pointer}
+    .filedrop.drag{border-color:#3b82f6;background:#0d1b2e}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Pager JSON Editor</h1>
+      <span class="tag">Edit <strong>logo_medium</strong>, <strong>logo_expanded</strong>, <strong>image</strong>, <strong>image_medium</strong>, <strong>image_expanded</strong></span>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: Input & Editor -->
+      <section class="panel">
+        <h3 style="margin:0 0 10px">1) Paste your JSON</h3>
+        <div id="drop" class="filedrop" title="Drop a .json file or click to pick">
+          Drop a .json file here or click to choose
+          <input id="picker" type="file" accept="application/json" style="display:none" />
+        </div>
+        <textarea id="inputJson" placeholder="Paste your JSON here…"></textarea>
+        <div class="controls">
+          <button class="primary" id="loadBtn">Load JSON</button>
+          <button class="ghost" id="formatBtn" title="Pretty-print the pasted JSON">Format</button>
+          <button class="ghost" id="exampleBtn" title="Load the example from the prompt">Load example</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3 style="margin:0 0 6px">2) Edit pagers</h3>
+        <div id="pagersZone">
+          <div class="empty">No pagers loaded yet. Paste JSON and click <span class="kbd">Load JSON</span>.</div>
+        </div>
+        <div class="controls">
+          <button id="addPager">Add pager</button>
+          <button class="warn" id="saveBtn">Apply Changes</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: Output & Actions -->
+      <aside class="panel right">
+        <h3 style="margin:0 0 10px">3) Output</h3>
+        <div class="switch" style="margin-bottom:8px">
+          <input id="minify" type="checkbox" /> <label for="minify">Minify JSON</label>
+        </div>
+        <textarea id="outputJson" placeholder="Your updated JSON will appear here…" readonly></textarea>
+        <div class="controls">
+          <button id="copyBtn">Copy JSON</button>
+          <button id="downloadBtn">Download .json</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="hint">Tips:
+          <ul style="margin:6px 0 0 18px; padding:0">
+            <li>Click thumbnails to open the URL in a new tab.</li>
+            <li>Use <span class="kbd">Tab</span> / <span class="kbd">Shift+Tab</span> to move between fields.</li>
+            <li>"Apply Changes" merges your edits back into the original JSON.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Copied!</div>
+
+  <script>
+    const input = document.getElementById('inputJson');
+    const output = document.getElementById('outputJson');
+    const pagersZone = document.getElementById('pagersZone');
+    const toast = document.getElementById('toast');
+
+    const state = { data: null };
+
+    function showToast(msg){
+      toast.textContent = msg; toast.classList.add('show');
+      setTimeout(()=>toast.classList.remove('show'),1200);
+    }
+
+    function pretty(obj){
+      const min = document.getElementById('minify').checked;
+      return JSON.stringify(obj, null, min ? 0 : 2);
+    }
+
+    function openNew(url){ if(!url) return; window.open(url, '_blank', 'noopener'); }
+
+    function mkCell(label, key, value){
+      const wrap = document.createElement('div');
+      wrap.style.display='grid';
+      wrap.style.gap='6px';
+      const cap = document.createElement('div');
+      cap.className='mini'; cap.textContent=label;
+      const inp = document.createElement('input');
+      inp.type='text'; inp.placeholder=key; inp.value=value||'';
+      inp.dataset.key = key;
+      wrap.appendChild(cap); wrap.appendChild(inp);
+      return {wrap, inp};
+    }
+
+    function renderPagersTable(){
+      const pagers = (((state.data||{}).mlp||{}).pagers)||[];
+      if(!pagers.length){
+        pagersZone.innerHTML = '<div class="empty">No pagers found at <code>mlp.pagers</code>.</div>';
+        return;
+      }
+      pagersZone.innerHTML = '';
+
+      // Header labels (visual only)
+      const labels = ['#','logo_medium','logo_expanded','image','image_medium','image_expanded',''];
+      const header = document.createElement('div');
+      header.style.display='grid'; header.style.gridTemplateColumns='28px 1.3fr 1.3fr 1.3fr 1.3fr 1.3fr 80px'; header.style.gap='8px'; header.style.margin='0 0 8px';
+      labels.forEach(t=>{ const th=document.createElement('div'); th.className='mini'; th.style.color='#94a3b8'; th.textContent=t; header.appendChild(th); });
+      pagersZone.appendChild(header);
+
+      pagers.forEach((p, idx)=>{
+        const row = document.createElement('div');
+        row.className='row';
+
+        const idxEl = document.createElement('div'); idxEl.className='idx'; idxEl.textContent = idx+1; row.appendChild(idxEl);
+
+        const c1 = mkCell('logo_medium','logo_medium', p.logo_medium);
+        const c2 = mkCell('logo_expanded','logo_expanded', p.logo_expanded);
+        const c3 = mkCell('image','image', p.image);
+        const c4 = mkCell('image_medium','image_medium', p.image_medium);
+        const c5 = mkCell('image_expanded','image_expanded', p.image_expanded);
+
+        [c1,c2,c3,c4,c5].forEach(({wrap,inp},i)=>{
+          // preview thumb
+          const prev = document.createElement('div'); prev.className='preview mini';
+          const img = document.createElement('img'); img.alt=''; img.src = inp.value || '';
+          img.addEventListener('click',()=>openNew(inp.value));
+          const pill = document.createElement('span'); pill.className='pill'; pill.textContent = 'Open';
+          pill.style.cursor='pointer'; pill.onclick=()=>openNew(inp.value);
+          prev.appendChild(img); prev.appendChild(pill);
+          wrap.appendChild(prev);
+
+          // live update preview on input
+          inp.addEventListener('input', ()=>{ img.src = inp.value; });
+
+          row.appendChild(wrap);
+        });
+
+        // actions
+        const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+        const del = document.createElement('button'); del.className='danger'; del.textContent='Delete';
+        del.onclick = ()=>{ state.data.mlp.pagers.splice(idx,1); renderPagersTable(); updateOutput(); };
+        actions.appendChild(del);
+        row.appendChild(actions);
+
+        // stash a mapper to pull values back when saving
+        row._getValues = ()=>({
+          logo_medium: c1.inp.value.trim(),
+          logo_expanded: c2.inp.value.trim(),
+          image: c3.inp.value.trim(),
+          image_medium: c4.inp.value.trim(),
+          image_expanded: c5.inp.value.trim(),
+        });
+
+        pagersZone.appendChild(row);
+      });
+    }
+
+    function updateFromUIIntoState(){
+      const rows = Array.from(pagersZone.querySelectorAll('.row'));
+      const pagers = (((state.data||{}).mlp||{}).pagers)||[];
+      rows.forEach((row, i)=>{
+        if(!pagers[i]) return;
+        const vals = row._getValues ? row._getValues() : {};
+        Object.assign(pagers[i], vals);
+      });
+    }
+
+    function updateOutput(){
+      if(!state.data){ output.value=''; return; }
+      const txt = pretty(state.data);
+      output.value = txt;
+    }
+
+    // Buttons & actions
+    document.getElementById('formatBtn').onclick = ()=>{
+      try{ const obj = JSON.parse(input.value); input.value = JSON.stringify(obj,null,2); }
+      catch(e){ showToast('Invalid JSON'); }
+    };
+
+    document.getElementById('loadBtn').onclick = ()=>{
+      try{
+        const obj = JSON.parse(input.value);
+        state.data = obj;
+        if(!state.data.mlp) state.data.mlp = {};
+        if(!Array.isArray(state.data.mlp.pagers)) state.data.mlp.pagers = [];
+        renderPagersTable();
+        updateOutput();
+        showToast('JSON loaded');
+      }catch(e){ showToast('Invalid JSON'); }
+    };
+
+    document.getElementById('saveBtn').onclick = ()=>{
+      if(!state.data){ showToast('Nothing to save'); return; }
+      updateFromUIIntoState();
+      updateOutput();
+      showToast('Changes applied');
+    };
+
+    document.getElementById('copyBtn').onclick = async ()=>{
+      try{ await navigator.clipboard.writeText(output.value||''); showToast('Copied JSON'); }
+      catch(e){ showToast('Copy failed'); }
+    };
+
+    document.getElementById('downloadBtn').onclick = ()=>{
+      if(!output.value){ showToast('Nothing to download'); return; }
+      const blob = new Blob([output.value], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'updated.json'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    };
+
+    document.getElementById('minify').onchange = ()=> updateOutput();
+
+    document.getElementById('addPager').onclick = ()=>{
+      if(!state.data){ showToast('Load JSON first'); return; }
+      state.data.mlp = state.data.mlp || {}; state.data.mlp.pagers = state.data.mlp.pagers || [];
+      state.data.mlp.pagers.push({
+        logo: '',
+        logo_medium: '',
+        logo_expanded: '',
+        subtitle: '',
+        image: '',
+        image_medium: '',
+        image_expanded: ''
+      });
+      renderPagersTable(); updateOutput();
+    };
+
+    // File picker & drag/drop
+    const drop = document.getElementById('drop');
+    const picker = document.getElementById('picker');
+    drop.onclick = ()=> picker.click();
+    picker.onchange = async (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      const text = await file.text(); input.value = text; showToast('File loaded');
+    };
+    drop.ondragover = (e)=>{ e.preventDefault(); drop.classList.add('drag'); };
+    drop.ondragleave = ()=> drop.classList.remove('drag');
+    drop.ondrop = async (e)=>{
+      e.preventDefault(); drop.classList.remove('drag');
+      const file = e.dataTransfer.files[0]; if(!file) return;
+      const text = await file.text(); input.value = text; showToast('File loaded');
+    };
+
+    // Example loader
+    document.getElementById('exampleBtn').onclick = ()=>{
+      input.value = `{
+  "mlp": {"pagers": [
+    {"logo":"","logo_medium":"https://example.com/logo_m.png","logo_expanded":"https://example.com/logo_x.png","subtitle":"","image":"https://example.com/img.jpg","image_medium":"https://example.com/img_m.jpg","image_expanded":"https://example.com/img_x.jpg"}
+  ]}
+}`;
+      showToast('Example loaded');
+    };
+  </script>
+</body>
+</html>
